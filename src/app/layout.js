@@ -2,8 +2,8 @@ import "./globals.css";
 import ToastProvider from "@/components/ToastProvider";
 
 export const metadata = {
-  title: "Battery Master - Business Management System",
-  description: "Premium battery business management software for local sellers",
+  title: "Ledger Pro - Business Management System",
+  description: "Premium business management software for local sellers",
 };
 
 export default function RootLayout({ children }) {

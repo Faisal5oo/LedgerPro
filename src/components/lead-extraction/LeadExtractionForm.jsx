@@ -1,40 +1,55 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, Calendar, Package, Scale, Download, Percent } from 'lucide-react';
+import { X, Calendar, Package, Scale, Download, Percent, User } from 'lucide-react';
+import { CustomerSelector } from '@/components';
 
 const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     description: 'Battery for Lead',
     batteryWeight: '',
-    leadReceived: ''
+    leadReceived: '',
+    leadPercentage: 60
   });
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
 
   const [isCalculating, setIsCalculating] = useState(false);
 
   useEffect(() => {
     if (entry) {
       setFormData({
-        date: new Date(entry.date), // Keep as Date object
+        date: entry.date ? new Date(entry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         description: entry.description || 'Battery for Lead',
         batteryWeight: entry.batteryWeight || '',
-        leadReceived: entry.leadReceived || '' // Allow empty for editing
+        leadReceived: entry.leadReceived || '', // Allow empty for editing
+        leadPercentage: entry.leadPercentage || 60
       });
+      // Set selectedCustomer properly - handle both populated and non-populated cases
+      if (entry.customerId) {
+        if (typeof entry.customerId === 'object' && entry.customerId.name) {
+          // Customer is populated
+          setSelectedCustomer(entry.customerId);
+        } else {
+          // Customer is just an ID
+          setSelectedCustomer(entry.customerId);
+        }
+      } else {
+        setSelectedCustomer(null);
+      }
     } else {
       // Reset form for new entry
       setFormData({
-        date: new Date(),
+        date: new Date().toISOString().split('T')[0],
         description: 'Battery for Lead',
         batteryWeight: '',
         leadReceived: '', // Start empty, not '0'
-        leadWeight: '',
-        leadPending: '',
-        percentage: ''
+        leadPercentage: 60
       });
+      setSelectedCustomer(null);
     }
   }, [entry]);
 
-  // Calculate lead weight and pending on battery weight change
+  // Calculate lead weight and pending on battery weight or percentage change
   useEffect(() => {
     if (formData.batteryWeight && !isNaN(formData.batteryWeight)) {
       setIsCalculating(true);
@@ -43,7 +58,7 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [formData.batteryWeight]);
+  }, [formData.batteryWeight, formData.leadPercentage]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -56,6 +71,11 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    if (!selectedCustomer) {
+      alert('Please select a customer');
+      return;
+    }
+
     if (!formData.batteryWeight || parseFloat(formData.batteryWeight) <= 0) {
       alert('Please enter a valid battery weight');
       return;
@@ -66,17 +86,25 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
       return;
     }
 
+    const leadPercentage = parseFloat(formData.leadPercentage) || 60; // Default to 60% if not provided
+    if (leadPercentage <= 0 || leadPercentage > 100) {
+      alert('Please enter a valid lead percentage (1-100)');
+      return;
+    }
+
     // Calculate all values on the frontend
     const batteryWeight = parseFloat(formData.batteryWeight);
     const leadReceived = parseFloat(formData.leadReceived) || 0; // Allow 0
-    const leadWeight = Math.round((batteryWeight * 0.6) * 100) / 100;
+    const leadWeight = Math.round((batteryWeight * leadPercentage / 100) * 100) / 100;
     const leadPending = Math.round((leadWeight - leadReceived) * 100) / 100;
     const percentage = leadWeight > 0 ? Math.round((leadReceived / leadWeight) * 100) : 0;
 
     const submitData = {
-      date: formData.date.toISOString(), // Convert Date to ISO string
+      customerId: selectedCustomer._id,
+      date: new Date(formData.date).toISOString(), // Convert Date to ISO string
       description: formData.description,
       batteryWeight: batteryWeight,
+      leadPercentage: leadPercentage,
       leadWeight: leadWeight,
       leadReceived: leadReceived,
       leadPending: leadPending,
@@ -84,8 +112,10 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
     };
 
     console.log('Form submitting complete data:', submitData);
+    console.log('Selected customer:', selectedCustomer);
+    console.log('Customer ID being sent:', submitData.customerId);
     console.log('Calculated values:', {
-      leadWeight: `${leadWeight} kg (60% of ${batteryWeight} kg)`,
+      leadWeight: `${leadWeight} kg (${leadPercentage}% of ${batteryWeight} kg)`,
       leadPending: `${leadPending} kg (${leadWeight} - ${leadReceived})`,
       percentage: `${percentage}% (${leadReceived}/${leadWeight} * 100)`
     });
@@ -94,7 +124,8 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
   };
 
   // Calculate derived values
-  const leadWeight = formData.batteryWeight ? (parseFloat(formData.batteryWeight) * 0.6) : 0;
+  const leadWeight = formData.batteryWeight && formData.leadPercentage ? 
+    (parseFloat(formData.batteryWeight) * parseFloat(formData.leadPercentage) / 100) : 0;
   const leadPending = leadWeight - (parseFloat(formData.leadReceived) || 0);
   const percentage = leadWeight > 0 ? ((parseFloat(formData.leadReceived) || 0) / leadWeight * 100) : 0;
 
@@ -126,6 +157,20 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
       {/* Form */}
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Customer Selection */}
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <User className="w-4 h-4 inline mr-2" />
+              Customer
+            </label>
+            <CustomerSelector
+              selectedCustomer={selectedCustomer}
+              onCustomerSelect={setSelectedCustomer}
+              placeholder="Select customer for lead extraction"
+              className="w-full"
+            />
+          </div>
+
           {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -192,7 +237,30 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
               required
             />
             <p className="text-xs text-gray-500 mt-1">
-              💡 60% of this weight will be calculated as expected lead weight.
+              💡 Enter the total weight of batteries purchased.
+            </p>
+          </div>
+
+          {/* Lead Percentage */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              <Percent className="w-4 h-4 inline mr-2" />
+              Lead Percentage (%)
+            </label>
+            <input
+              type="number"
+              name="leadPercentage"
+              value={formData.leadPercentage}
+              onChange={handleChange}
+              step="0.1"
+              min="0"
+              max="100"
+              placeholder="Enter lead percentage"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              💡 Percentage of battery weight expected as lead (default: 60%).
             </p>
           </div>
 
@@ -228,7 +296,7 @@ const LeadExtractionForm = ({ entry, onSubmit, onCancel }) => {
                 {isCalculating ? '...' : leadWeight.toFixed(2)}
               </div>
               <div className="text-sm text-gray-500">Lead Weight (kg)</div>
-              <div className="text-xs text-gray-400">60% of battery weight</div>
+              <div className="text-xs text-gray-400">{formData.leadPercentage}% of battery weight</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-orange-600">

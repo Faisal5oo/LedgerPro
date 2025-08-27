@@ -3,6 +3,7 @@ import dbConnect from '@/lib/dbConnect';
 import { adminProtectedRoute } from '@/middleware/authMiddleware';
 import LedgerEntry from '@/models/LedgerEntry';
 import LeadExtraction from '@/models/LeadExtraction';
+import LeadSelling from '@/models/LeadSelling';
 
 export async function GET(req) {
   try {
@@ -25,7 +26,12 @@ export async function GET(req) {
     // Get today's lead extraction entries
     const todayLeadEntries = await LeadExtraction.find({
       date: { $gte: startOfDay, $lt: endOfDay }
-    }).lean();
+    }).populate('customerId', 'name').lean();
+
+    // Get today's lead selling entries
+    const todayLeadSellingEntries = await LeadSelling.find({
+      date: { $gte: startOfDay, $lt: endOfDay }
+    }).populate('customerId', 'name').lean();
 
     // Calculate ledger stats
     const totalCredit = todayLedgerEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
@@ -38,13 +44,27 @@ export async function GET(req) {
     const totalLeadReceived = todayLeadEntries.reduce((sum, entry) => sum + (entry.leadReceived || 0), 0);
     const totalLeadPending = todayLeadEntries.reduce((sum, entry) => sum + (entry.leadPending || 0), 0);
 
+    // Calculate lead selling stats
+    const totalLeadSold = todayLeadSellingEntries.reduce((sum, entry) => sum + (entry.weight || 0), 0);
+    const totalLeadSellingCredit = todayLeadSellingEntries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+    const totalLeadSellingDebit = todayLeadSellingEntries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+    const totalCommuteRent = todayLeadSellingEntries.reduce((sum, entry) => sum + (entry.commuteRent || 0), 0);
+
     // Get recent entries for quick overview
     const recentLedgerEntries = await LedgerEntry.find()
+      .populate('customerId', 'name')
       .sort({ date: -1, createdAt: -1 })
       .limit(5)
       .lean();
 
     const recentLeadEntries = await LeadExtraction.find()
+      .populate('customerId', 'name')
+      .sort({ date: -1, createdAt: -1 })
+      .limit(5)
+      .lean();
+
+    const recentLeadSellingEntries = await LeadSelling.find()
+      .populate('customerId', 'name')
       .sort({ date: -1, createdAt: -1 })
       .limit(5)
       .lean();
@@ -63,11 +83,20 @@ export async function GET(req) {
           totalLeadReceived: Math.round(totalLeadReceived * 100) / 100,
           totalLeadPending: Math.round(totalLeadPending * 100) / 100,
           entryCount: todayLeadEntries.length
+        },
+        leadSelling: {
+          totalLeadSold: Math.round(totalLeadSold * 100) / 100,
+          totalCredit: Math.round(totalLeadSellingCredit * 100) / 100,
+          totalDebit: Math.round(totalLeadSellingDebit * 100) / 100,
+          totalCommuteRent: Math.round(totalCommuteRent * 100) / 100,
+          netBalance: Math.round((totalLeadSellingCredit - totalLeadSellingDebit) * 100) / 100,
+          entryCount: todayLeadSellingEntries.length
         }
       },
       recent: {
         ledger: recentLedgerEntries,
-        leadExtraction: recentLeadEntries
+        leadExtraction: recentLeadEntries,
+        leadSelling: recentLeadSellingEntries
       }
     };
 

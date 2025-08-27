@@ -3,16 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 import { 
   LedgerTable, 
   LedgerForm, 
   LedgerActions, 
   DeleteConfirmModal, 
-  PDFExportModal 
+  PDFExportModal,
+  SearchSummary,
+
 } from '@/components';
 import Layout from "@/components/LayoutWrapper";
 
 export default function LedgerPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -22,6 +26,9 @@ export default function LedgerPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Fetch entries for selected date
   const fetchEntries = async () => {
@@ -66,8 +73,46 @@ export default function LedgerPage() {
   };
 
   useEffect(() => {
-    fetchEntries();
-  }, [selectedDate]);
+    if (!searchTerm) {
+      fetchEntries();
+    }
+  }, [selectedDate, searchTerm]);
+
+  // Search functionality
+  const handleSearch = async (term) => {
+    if (!term || term.trim().length < 2) return;
+    
+    try {
+      setIsSearching(true);
+      setSearchTerm(term);
+      
+      const response = await fetch(`/api/ledger/search?q=${encodeURIComponent(term)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.data);
+        setEntries(data.data.entries);
+      } else {
+        toast.error(data.error || 'Search failed');
+        setSearchResults(null);
+        setEntries([]);
+      }
+    } catch (error) {
+      console.error('Error searching entries:', error);
+      toast.error('Failed to search entries');
+      setSearchResults(null);
+      setEntries([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Clear search functionality
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setSearchResults(null);
+    fetchEntries(); // Fetch entries for the selected date
+  };
 
   // Handle form submission (create/update)
   const handleSubmit = async (data) => {
@@ -94,9 +139,10 @@ export default function LedgerPage() {
       console.log('Response data:', result);
 
       if (result.success) {
-        toast.success(
+        const message = result.message || (
           selectedEntry ? 'Entry updated successfully' : 'Entry added successfully'
         );
+        toast.success(message);
         setIsFormOpen(false);
         setSelectedEntry(null);
         fetchEntries();
@@ -138,6 +184,17 @@ export default function LedgerPage() {
       console.error('Error deleting entry:', error);
       toast.error('Failed to delete entry');
     }
+  };
+
+  // Handle customer click - navigate to customer detail page
+  const handleCustomerClick = (customerId) => {
+    router.push(`/ledger/customer-detail/${customerId}`);
+  };
+
+  // Handle weight addition
+  const handleWeightAdd = (updatedEntry) => {
+    // Refresh the entries to show updated data
+    fetchEntries();
   };
 
   // Show delete confirmation modal
@@ -185,6 +242,7 @@ export default function LedgerPage() {
         // Prepare table data with proper formatting
         const tableData = entries.map((entry, index) => [
           index + 1,
+          entry.customerName || 'N/A',
           entry.batteryType || 'N/A',
           entry.totalWeight ? `${entry.totalWeight} kg` : 'N/A',
           entry.ratePerKg ? `Rs ${entry.ratePerKg.toFixed(2)}` : 'N/A',
@@ -195,7 +253,7 @@ export default function LedgerPage() {
         
         // Add table
         autoTable(doc, {
-          head: [['#', 'Product Type', 'Total Weight', 'Rate/kg', 'Credit', 'Debit', 'Balance']],
+          head: [['#', 'Customer', 'Product Type', 'Total Weight', 'Rate/kg', 'Credit', 'Debit', 'Balance']],
           body: tableData,
           startY: 50,
           styles: {
@@ -212,12 +270,13 @@ export default function LedgerPage() {
           },
           columnStyles: {
             0: { cellWidth: 15 }, // #
-            1: { cellWidth: 35 }, // Product Type
-            2: { cellWidth: 30 }, // Total Weight
-            3: { cellWidth: 25 }, // Rate/kg
-            4: { cellWidth: 30 }, // Credit
-            5: { cellWidth: 30 }, // Debit
-            6: { cellWidth: 30 }, // Balance
+            1: { cellWidth: 35 }, // Customer
+            2: { cellWidth: 30 }, // Product Type
+            3: { cellWidth: 25 }, // Total Weight
+            4: { cellWidth: 25 }, // Rate/kg
+            5: { cellWidth: 30 }, // Credit
+            6: { cellWidth: 30 }, // Debit
+            7: { cellWidth: 30 }, // Balance
           },
         });
         
@@ -309,11 +368,24 @@ export default function LedgerPage() {
           onExportPDF={showPDFModal}
           selectedDate={selectedDate}
           onDateChange={setSelectedDate}
+          onSearch={handleSearch}
+          searchTerm={searchTerm}
+          onClearSearch={handleClearSearch}
         />
 
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
+        {/* Search Results Summary */}
+        {searchResults && searchTerm && (
+          <SearchSummary searchResults={searchResults} searchTerm={searchTerm} />
+        )}
+
+
+
+        {isLoading || isSearching ? (
+          <div className="flex flex-col justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#0A1172]"></div>
+            <p className="mt-4 text-gray-600">
+              {isSearching ? 'Searching...' : 'Loading entries...'}
+            </p>
           </div>
         ) : entries.length > 0 ? (
           <LedgerTable
@@ -323,6 +395,8 @@ export default function LedgerPage() {
               setIsFormOpen(true);
             }}
             onDelete={showDeleteModal}
+            onCustomerClick={handleCustomerClick}
+            onWeightAdd={handleWeightAdd}
           />
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
@@ -331,17 +405,43 @@ export default function LedgerPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No entries found</h3>
-            <p className="text-gray-500 mb-6">No transactions recorded for {selectedDate.toLocaleDateString()}. Start by adding your first entry.</p>
-            <button
-              onClick={() => {
-                setSelectedEntry(null);
-                setIsFormOpen(true);
-              }}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
-            >
-              Add First Entry
-            </button>
+            {searchTerm ? (
+              <>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No search results found</h3>
+                <p className="text-gray-500 mb-6">No entries found for "{searchTerm}" across all dates. Try a different search term.</p>
+                <div className="flex justify-center space-x-3">
+                  <button
+                    onClick={handleClearSearch}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-[#0A1172] bg-white border border-[#0A1172] rounded-md hover:bg-[#0A1172]/5 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                  >
+                    Clear Search
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedEntry(null);
+                      setIsFormOpen(true);
+                    }}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                  >
+                    Add New Entry
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No entries found</h3>
+                <p className="text-gray-500 mb-6">No transactions recorded for {selectedDate.toLocaleDateString()}. Start by adding your first entry.</p>
+                <button
+                  onClick={() => {
+                    setSelectedEntry(null);
+                    setIsFormOpen(true);
+                  }}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                >
+                  Add First Entry
+                </button>
+              </>
+            )}
           </div>
         )}
 
@@ -388,6 +488,8 @@ export default function LedgerPage() {
           selectedDate={selectedDate}
           isExportingPDF={isExportingPDF}
         />
+
+
       </div>
     </Layout>
   );

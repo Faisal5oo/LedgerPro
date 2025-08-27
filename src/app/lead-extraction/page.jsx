@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-hot-toast';
 import { 
@@ -8,11 +9,14 @@ import {
   LeadExtractionForm, 
   LeadExtractionActions, 
   DeleteConfirmModal, 
-  PDFExportModal 
+  PDFExportModal,
+  LeadExtractionSearchSummary,
+  LeadExtractionDailyStats
 } from '@/components/lead-extraction';
 import Layout from "@/components/LayoutWrapper";
 
 export default function LeadExtractionPage() {
+  const router = useRouter();
   const [entries, setEntries] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -22,6 +26,9 @@ export default function LeadExtractionPage() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // Test function to fetch all entries
   // const testFetchAll = async () => {
@@ -89,8 +96,46 @@ export default function LeadExtractionPage() {
   };
 
   useEffect(() => {
-    fetchEntries();
-  }, [selectedDate]);
+    if (!searchTerm) {
+      fetchEntries();
+    }
+  }, [selectedDate, searchTerm]);
+
+  // Search functionality
+  const handleSearch = async (term) => {
+    if (!term || term.trim().length < 2) return;
+    
+    try {
+      setIsSearching(true);
+      setSearchTerm(term);
+      
+      const response = await fetch(`/api/lead-extraction/search?q=${encodeURIComponent(term)}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setSearchResults(data.data);
+        setEntries(data.data.entries);
+      } else {
+        toast.error(data.error || 'Search failed');
+        setSearchResults(null);
+        setEntries([]);
+      }
+    } catch (error) {
+      console.error('Error searching entries:', error);
+      toast.error('Failed to search entries');
+      setSearchResults(null);
+      setEntries([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Clear search functionality
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setSearchResults(null);
+    fetchEntries(); // Fetch entries for the selected date
+  };
 
   // Handle form submission (create/update)
   const handleSubmit = async (data) => {
@@ -310,6 +355,11 @@ export default function LeadExtractionPage() {
     setIsPDFModalOpen(true);
   };
 
+  // Handle customer click - navigate to customer detail page
+  const handleCustomerClick = (customerId) => {
+    router.push(`/lead-extraction/customer-detail/${customerId}`);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -330,11 +380,22 @@ export default function LeadExtractionPage() {
           onExportPDF={showPDFModal}
           selectedDate={selectedDate}
           onDateChange={setSelectedDate}
+          onSearch={handleSearch}
+          searchTerm={searchTerm}
+          onClearSearch={handleClearSearch}
         />
 
-        {isLoading ? (
-          <div className="flex justify-center items-center h-64">
+        {/* Search Results Summary - Only show when searching for a specific customer */}
+        {searchResults && searchTerm && (
+          <LeadExtractionSearchSummary searchResults={searchResults} searchTerm={searchTerm} />
+        )}
+
+        {isLoading || isSearching ? (
+          <div className="flex flex-col justify-center items-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#0A1172]"></div>
+            <p className="mt-4 text-gray-600">
+              {isSearching ? 'Searching...' : 'Loading entries...'}
+            </p>
           </div>
         ) : entries.length > 0 ? (
           <LeadExtractionTable
@@ -344,6 +405,7 @@ export default function LeadExtractionPage() {
               setIsFormOpen(true);
             }}
             onDelete={showDeleteModal}
+            onCustomerClick={handleCustomerClick}
           />
         ) : (
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-12 text-center">
@@ -352,17 +414,43 @@ export default function LeadExtractionPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No lead extraction entries found</h3>
-            <p className="text-gray-500 mb-6">No entries recorded for {selectedDate.toLocaleDateString()}. Start by adding your first battery purchase entry.</p>
-            <button
-              onClick={() => {
-                setSelectedEntry(null);
-                setIsFormOpen(true);
-              }}
-              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
-            >
-              Add First Entry
-            </button>
+            {searchTerm ? (
+              <>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No search results found</h3>
+                <p className="text-gray-500 mb-6">No entries found for "{searchTerm}" across all dates. Try a different search term.</p>
+                <div className="flex justify-center space-x-3">
+                  <button
+                    onClick={handleClearSearch}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-[#0A1172] bg-white border border-[#0A1172] rounded-md hover:bg-[#0A1172]/5 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                  >
+                    Clear Search
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedEntry(null);
+                      setIsFormOpen(true);
+                    }}
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                  >
+                    Add New Entry
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No lead extraction entries found</h3>
+                <p className="text-gray-500 mb-6">No entries recorded for {selectedDate.toLocaleDateString()}. Start by adding your first battery purchase entry.</p>
+                <button
+                  onClick={() => {
+                    setSelectedEntry(null);
+                    setIsFormOpen(true);
+                  }}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-[#0A1172] rounded-md hover:bg-[#0A1172]/90 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
+                >
+                  Add First Entry
+                </button>
+              </>
+            )}
           </div>
         )}
 

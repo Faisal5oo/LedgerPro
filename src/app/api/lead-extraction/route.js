@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { startOfDay, endOfDay } from 'date-fns';
 import dbConnect from '@/lib/dbConnect';
 import LeadExtraction from '@/models/LeadExtraction';
+import Customer from '@/models/Customer';
 import { adminProtectedRoute } from '@/middleware/authMiddleware';
 import mongoose from 'mongoose';
 
@@ -43,8 +44,16 @@ export async function GET(req) {
     console.log('Final query:', query);
     
     const entries = await LeadExtraction.find(query)
+      .populate({
+        path: 'customerId',
+        select: 'name',
+        options: { strictPopulate: false }
+      })
       .sort({ date: 1, createdAt: 1 })
       .lean();
+    
+    console.log('Fetched entries:', entries.length);
+    console.log('Sample entry:', entries[0]);
     
     console.log('Found entries:', entries.length);
     
@@ -52,8 +61,17 @@ export async function GET(req) {
   } catch (error) {
     console.error('=== ERROR in GET /api/lead-extraction ===');
     console.error('Error fetching lead extraction entries:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch lead extraction entries' },
+      { 
+        success: false, 
+        error: 'Failed to fetch lead extraction entries',
+        details: error.message 
+      },
       { status: 500 }
     );
   }
@@ -71,6 +89,7 @@ export async function POST(req) {
     
     console.log('Creating lead extraction entry with data:', body);
     console.log('Date received:', body.date, 'Type:', typeof body.date);
+    console.log('Customer ID received:', body.customerId);
     
     // Parse date if it's a string
     if (typeof body.date === 'string') {
@@ -79,9 +98,28 @@ export async function POST(req) {
     }
     
     // Validate required fields
+    if (!body.customerId) {
+      return NextResponse.json(
+        { success: false, error: 'Customer ID is required' },
+        { status: 400 }
+      );
+    }
+
     if (!body.batteryWeight || isNaN(body.batteryWeight)) {
       return NextResponse.json(
         { success: false, error: 'Valid battery weight is required' },
+        { status: 400 }
+      );
+    }
+
+    // Set default lead percentage if not provided
+    if (!body.leadPercentage || isNaN(body.leadPercentage)) {
+      body.leadPercentage = 60; // Default to 60%
+    }
+    
+    if (body.leadPercentage <= 0 || body.leadPercentage > 100) {
+      return NextResponse.json(
+        { success: false, error: 'Valid lead percentage (1-100) is required' },
         { status: 400 }
       );
     }
@@ -104,6 +142,9 @@ export async function POST(req) {
     
     // Create new entry with complete data
     const entry = await LeadExtraction.create(body);
+    
+    // Populate customer information
+    await entry.populate('customerId', 'name');
     
     console.log('Successfully created entry:', entry);
     
@@ -154,8 +195,8 @@ export async function PUT(req) {
       );
     }
     
-    // Recalculate values if batteryWeight or leadReceived changed
-    if (body.batteryWeight !== undefined || body.leadReceived !== undefined) {
+    // Recalculate values if batteryWeight, leadReceived, or leadPercentage changed
+    if (body.batteryWeight !== undefined || body.leadReceived !== undefined || body.leadPercentage !== undefined) {
       const currentEntry = await LeadExtraction.findById(id);
       if (!currentEntry) {
         return NextResponse.json(
@@ -166,16 +207,17 @@ export async function PUT(req) {
       
       const batteryWeight = body.batteryWeight !== undefined ? body.batteryWeight : currentEntry.batteryWeight;
       const leadReceived = body.leadReceived !== undefined ? body.leadReceived : currentEntry.leadReceived;
+      const leadPercentage = body.leadPercentage !== undefined ? body.leadPercentage : (currentEntry.leadPercentage || 60);
       
       // Recalculate
-      body.leadWeight = Math.round((batteryWeight * 0.6) * 100) / 100;
+      body.leadWeight = Math.round((batteryWeight * leadPercentage / 100) * 100) / 100;
       body.leadPending = Math.round((body.leadWeight - leadReceived) * 100) / 100;
       body.percentage = body.leadWeight > 0 ? Math.round((leadReceived / body.leadWeight) * 100) : 0;
     }
     
-    const updatedEntry = await LeadExtraction.findByIdAndUpdate(
-      id,
-      { $set: body },
+        const updatedEntry = await LeadExtraction.findByIdAndUpdate(
+      id, 
+      { $set: body }, 
       { new: true, runValidators: true }
     );
     
@@ -185,6 +227,9 @@ export async function PUT(req) {
         { status: 404 }
       );
     }
+    
+    // Populate customer information
+    await updatedEntry.populate('customerId', 'name');
     
     return NextResponse.json({ success: true, data: updatedEntry });
   } catch (error) {

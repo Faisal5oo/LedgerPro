@@ -1,6 +1,12 @@
 import mongoose from 'mongoose';
 
 const leadExtractionSchema = new mongoose.Schema({
+  customerId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Customer',
+    required: true,
+    index: true
+  },
   date: {
     type: Date,
     required: true,
@@ -15,6 +21,13 @@ const leadExtractionSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+  leadPercentage: {
+    type: Number,
+    required: true,
+    min: 0,
+    max: 100,
+    default: 60
   },
   leadWeight: {
     type: Number,
@@ -41,6 +54,18 @@ const leadExtractionSchema = new mongoose.Schema({
 }, {
   timestamps: true
 });
+
+// Add compound index for efficient date queries (customerId already has index:true)
+leadExtractionSchema.index({ date: 1, createdAt: 1 });
+
+// Virtual for customer name (will be populated)
+leadExtractionSchema.virtual('customerName').get(function() {
+  return this.populated('customerId') ? this.customerId.name : undefined;
+});
+
+// Ensure virtuals are included when converting to JSON
+leadExtractionSchema.set('toJSON', { virtuals: true });
+leadExtractionSchema.set('toObject', { virtuals: true });
 
 const LeadExtraction = mongoose.models.LeadExtraction || mongoose.model('LeadExtraction', leadExtractionSchema);
 

@@ -9,7 +9,8 @@ import {
   Settings, 
   User,
   LogOut,
-  Home
+  Home,
+  Truck
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -30,6 +31,11 @@ const Sidebar = () => {
       name: 'Lead Extraction',
       href: '/lead-extraction',
       icon: Package
+    },
+    {
+      name: 'Lead Selling',
+      href: '/lead-selling',
+      icon: Truck
     }
   ];
 

@@ -75,7 +75,7 @@ export default function SignupPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center"
         >
-          <h1 className="text-3xl font-bold text-[#0A1172]">Battery Master</h1>
+          <h1 className="text-3xl font-bold text-[#0A1172]">Ledger Pro</h1>
           <p className="mt-2 text-sm text-gray-600">Create your business account</p>
         </motion.div>
       </div>
