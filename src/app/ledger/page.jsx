@@ -35,8 +35,12 @@ export default function LedgerPage() {
     try {
       console.log('Fetching entries for date:', selectedDate);
       setIsLoading(true);
+      // Format date as YYYY-MM-DD to avoid timezone issues
+      const dateStr = selectedDate instanceof Date && !isNaN(selectedDate.getTime())
+        ? selectedDate.toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
       const response = await fetch(
-        `/api/ledger?date=${selectedDate.toISOString()}`
+        `/api/ledger?date=${dateStr}`
       );
       console.log('Fetch response status:', response.status);
       const data = await response.json();

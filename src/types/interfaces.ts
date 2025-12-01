@@ -1,6 +1,9 @@
 export interface Customer {
   _id?: string;
   name: string;
+  description?: string;
+  address?: string;
+  phone?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -15,7 +18,7 @@ export interface LedgerEntry {
   customerId: string;
   customerName?: string; // Virtual field, populated from Customer reference
   date: Date;
-  batteryType: 'battery' | 'gutka';
+  batteryType?: 'battery' | 'gutka'; // Optional for payment-only entries
   totalWeight: number;
   ratePerKg: number;
   credit: number;
@@ -23,6 +26,7 @@ export interface LedgerEntry {
   balance: number;
   weightLogs: WeightLog[];
   notes?: string;
+  isPaymentOnly?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -49,9 +53,11 @@ export interface PDFGenerationResponse {
 export interface CustomerAccount {
   customer: Customer;
   entries: LedgerEntry[];
+  payments: LedgerEntry[]; // Payment-only entries
   totalWeight: number;
   totalCredit: number;
   totalDebit: number;
+  totalReceived: number; // Total from payment entries
   netBalance: number;
 }
 

@@ -7,6 +7,21 @@ const customerSchema = new mongoose.Schema({
     trim: true,
     unique: true,
     index: true
+  },
+  description: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  address: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  phone: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true

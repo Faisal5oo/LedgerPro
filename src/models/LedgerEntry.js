@@ -28,17 +28,25 @@ const ledgerEntrySchema = new mongoose.Schema({
   batteryType: {
     type: String,
     enum: ['battery', 'gutka'],
-    required: true
+    required: function() {
+      return !this.isPaymentOnly;
+    }
   },
   totalWeight: {
     type: Number,
-    required: true,
-    min: 0
+    required: function() {
+      return !this.isPaymentOnly;
+    },
+    min: 0,
+    default: 0
   },
   ratePerKg: {
     type: Number,
-    required: true,
-    min: 0
+    required: function() {
+      return !this.isPaymentOnly;
+    },
+    min: 0,
+    default: 0
   },
   credit: {
     type: Number,
@@ -64,6 +72,10 @@ const ledgerEntrySchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  isPaymentOnly: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

@@ -23,14 +23,17 @@ async function calculateDailyBalance(date) {
   return balance;
 }
 
-// Helper function to check if customer has existing entry on the same day
-async function findExistingCustomerEntry(customerId, date) {
-  const startDate = startOfDay(date);
-  const endDate = endOfDay(date);
+// Helper function to check if customer has existing entry on the same day with same product type
+async function findExistingCustomerEntry(customerId, date, batteryType) {
+  const dateObj = date instanceof Date ? date : new Date(date);
+  const startDate = startOfDay(dateObj);
+  const endDate = endOfDay(dateObj);
   
   return await LedgerEntry.findOne({
     customerId: customerId,
-    date: { $gte: startDate, $lte: endDate }
+    date: { $gte: startDate, $lte: endDate },
+    batteryType: batteryType,
+    isPaymentOnly: { $ne: true } // Don't merge with payment-only entries
   });
 }
 
@@ -47,8 +50,10 @@ export async function GET(req) {
     
     let query = {};
     if (date) {
-      const startDate = startOfDay(new Date(date));
-      const endDate = endOfDay(date);
+      // Parse the date string and create date range for the entire day
+      const dateObj = new Date(date);
+      const startDate = startOfDay(dateObj);
+      const endDate = endOfDay(dateObj);
       query = { date: { $gte: startDate, $lte: endDate } };
     }
     
@@ -57,7 +62,7 @@ export async function GET(req) {
       .sort({ date: 1, createdAt: 1 })
       .lean();
     
-    // Calculate running balance for each entry
+    // Calculate running balance for each entry (including payment entries)
     let runningBalance = 0;
     const entriesWithBalance = entries.map(entry => {
       runningBalance += entry.credit - entry.debit;
@@ -103,20 +108,41 @@ export async function POST(req) {
       );
     }
     
-    if (!body.totalWeight || body.totalWeight <= 0) {
-      console.error('Invalid totalWeight in request body:', body.totalWeight);
-      return NextResponse.json(
-        { success: false, error: 'Valid total weight is required' },
-        { status: 400 }
-      );
-    }
+    // Check if this is a payment-only entry (debit without weight/product)
+    // A payment entry is identified by:
+    // 1. Explicitly marked as isPaymentOnly === true, OR
+    // 2. Has debit > 0 AND (no weight OR weight = 0) AND (no rate OR rate = 0)
+    const hasDebit = body.debit && parseFloat(body.debit) > 0;
+    const hasNoWeight = !body.totalWeight || parseFloat(body.totalWeight) <= 0;
+    const hasNoRate = !body.ratePerKg || parseFloat(body.ratePerKg) <= 0;
+    const isPaymentOnly = body.isPaymentOnly === true || (hasDebit && hasNoWeight && hasNoRate);
     
-    if (!body.ratePerKg || body.ratePerKg <= 0) {
-      console.error('Invalid ratePerKg in request body:', body.ratePerKg);
-      return NextResponse.json(
-        { success: false, error: 'Valid rate per kg is required' },
-        { status: 400 }
-      );
+    if (!isPaymentOnly) {
+      // For regular entries, validate weight and rate
+      if (!body.totalWeight || body.totalWeight <= 0) {
+        console.error('Invalid totalWeight in request body:', body.totalWeight);
+        return NextResponse.json(
+          { success: false, error: 'Valid total weight is required' },
+          { status: 400 }
+        );
+      }
+      
+      if (!body.ratePerKg || body.ratePerKg <= 0) {
+        console.error('Invalid ratePerKg in request body:', body.ratePerKg);
+        return NextResponse.json(
+          { success: false, error: 'Valid rate per kg is required' },
+          { status: 400 }
+        );
+      }
+    } else {
+      // For payment-only entries, validate debit amount
+      if (!body.debit || body.debit <= 0) {
+        console.error('Invalid debit in request body:', body.debit);
+        return NextResponse.json(
+          { success: false, error: 'Valid debit amount is required for payment entries' },
+          { status: 400 }
+        );
+      }
     }
     
     // Validate that the customer exists
@@ -138,8 +164,38 @@ export async function POST(req) {
       );
     }
     
-    // Check if customer already has an entry on the same day
-    const existingEntry = await findExistingCustomerEntry(body.customerId, new Date(body.date));
+    // For payment-only entries, always create a new entry (don't merge)
+    if (isPaymentOnly) {
+      console.log('Creating payment-only entry for customer:', body.customerId);
+      const entry = await LedgerEntry.create({
+        customerId: body.customerId,
+        date: new Date(body.date),
+        batteryType: body.batteryType || 'battery', // Default, but not used for payment entries
+        totalWeight: 0,
+        ratePerKg: 0,
+        credit: 0,
+        debit: body.debit || 0,
+        balance: 0, // Will be calculated on retrieval
+        weightLogs: [],
+        notes: body.notes || '',
+        isPaymentOnly: true
+      });
+      
+      // Populate customer information
+      await entry.populate('customerId', 'name');
+      
+      // Calculate and update balance
+      const balance = await calculateDailyBalance(entry.date);
+      entry.balance = balance;
+      
+      return NextResponse.json(
+        { success: true, data: entry, message: 'Payment entry created successfully' },
+        { status: 201 }
+      );
+    }
+    
+    // Check if customer already has an entry on the same day with same product type
+    const existingEntry = await findExistingCustomerEntry(body.customerId, new Date(body.date), body.batteryType);
     
     if (existingEntry) {
       console.log('Found existing entry for same customer on same day:', existingEntry._id);

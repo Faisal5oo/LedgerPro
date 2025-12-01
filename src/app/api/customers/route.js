@@ -56,7 +56,10 @@ export async function POST(req) {
     }
 
     const customer = await Customer.create({
-      name: body.name.trim()
+      name: body.name.trim(),
+      description: body.description?.trim() || '',
+      address: body.address?.trim() || '',
+      phone: body.phone?.trim() || ''
     });
     
     return NextResponse.json(

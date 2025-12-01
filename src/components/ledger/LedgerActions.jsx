@@ -97,8 +97,19 @@ const LedgerActions = ({
             <Calendar className="w-4 h-4 text-gray-500" />
             <input 
               type="date" 
-              value={selectedDate.toISOString().split('T')[0]} 
-              onChange={(e) => onDateChange(new Date(e.target.value))} 
+              value={selectedDate && !isNaN(selectedDate.getTime()) 
+                ? selectedDate.toISOString().split('T')[0] 
+                : new Date().toISOString().split('T')[0]} 
+              onChange={(e) => {
+                const dateValue = e.target.value;
+                if (dateValue) {
+                  const newDate = new Date(dateValue);
+                  // Only update if the date is valid
+                  if (!isNaN(newDate.getTime())) {
+                    onDateChange(newDate);
+                  }
+                }
+              }} 
               className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors" 
             />
           </div>

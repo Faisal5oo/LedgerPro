@@ -11,7 +11,8 @@ import {
   Menu,
   Truck,
   Package,
-  Clock
+  Clock,
+  Users
 } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -27,6 +28,12 @@ const menuItems = [
     name: 'Daily Ledger',
     icon: BookOpen,
     description: 'Manage Transactions'
+  },
+  {
+    path: '/customers',
+    name: 'Customers',
+    icon: Users,
+    description: 'Manage Customers'
   },
   {
     path: '/lead-extraction',
@@ -51,7 +58,8 @@ const menuItems = [
 const Layout = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [admin, setAdmin] = useState(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState(null);
+  const [isMounted, setIsMounted] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
 
@@ -61,16 +69,20 @@ const Layout = ({ children }) => {
     if (storedAdmin) {
       setAdmin(JSON.parse(storedAdmin));
     }
+    setIsMounted(true);
+    setCurrentTime(new Date());
   }, []);
 
   // Update time every second
   useEffect(() => {
+    if (!isMounted) return;
+    
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isMounted]);
 
   const handleLogout = async () => {
     try {
@@ -271,27 +283,29 @@ const Layout = ({ children }) => {
           <div className="flex-1 flex items-center justify-end">
             <div className="flex items-center space-x-4">
               {/* Time and Date Display */}
-              <div className="flex items-center space-x-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                <Clock className="w-4 h-4 text-[#0A1172]" />
-                <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">
-                    {currentTime.toLocaleTimeString('en-US', { 
-                      hour: '2-digit', 
-                      minute: '2-digit',
-                      second: '2-digit',
-                      hour12: true 
-                    })}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {currentTime.toLocaleDateString('en-US', { 
-                      weekday: 'short',
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric'
-                    })}
+              {isMounted && currentTime && (
+                <div className="flex items-center space-x-3 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <Clock className="w-4 h-4 text-[#0A1172]" />
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-gray-900">
+                      {currentTime.toLocaleTimeString('en-US', { 
+                        hour: '2-digit', 
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: true 
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {currentTime.toLocaleDateString('en-US', { 
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 rounded-full bg-[#0A1172] text-white flex items-center justify-center font-medium">

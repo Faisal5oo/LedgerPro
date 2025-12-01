@@ -17,12 +17,16 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [customType, setCustomType] = useState('');
+  const [isPaymentOnly, setIsPaymentOnly] = useState(false);
 
   const batteryTypes = ['battery', 'gutka'];
 
   useEffect(() => {
     if (entry) {
       console.log('Editing entry:', entry);
+      const isPayment = entry.isPaymentOnly === true;
+      setIsPaymentOnly(isPayment);
+      
       setFormData({
         ...entry,
         date: entry.date ? new Date(entry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -41,12 +45,13 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
         });
       }
       
-      if (!batteryTypes.includes(entry.batteryType)) {
+      if (entry.batteryType && !batteryTypes.includes(entry.batteryType)) {
         setCustomType(entry.batteryType);
       }
     } else {
       console.log('Creating new entry - setting default values');
       // Reset form for new entry
+      setIsPaymentOnly(false);
       setFormData({
         date: new Date().toISOString().split('T')[0],
         customerId: '',
@@ -62,12 +67,35 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
     console.log('Form data after useEffect:', formData);
   }, [entry]);
 
+  // Helper function to format date for input field
+  const formatDateForInput = (date) => {
+    if (!date) return '';
+    const dateObj = date instanceof Date ? date : new Date(date);
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toISOString().split('T')[0];
+    }
+    return '';
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'date' ? new Date(value) : value
-    }));
+    setFormData(prev => {
+      if (name === 'date') {
+        // For date inputs, validate before creating Date object
+        if (value) {
+          const dateObj = new Date(value);
+          // Only update if the date is valid
+          if (!isNaN(dateObj.getTime())) {
+            return { ...prev, [name]: dateObj };
+          }
+          // If invalid, keep the previous value
+          return prev;
+        }
+        // If empty, set to empty string (will be handled in value prop)
+        return { ...prev, [name]: '' };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleCustomerSelect = (customer) => {
@@ -94,28 +122,37 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
     
     console.log('Form data before validation:', formData);
     
-    // Validate required fields - be more lenient
+    // Validate required fields
     if (!formData.customerId || formData.customerId.trim() === '') {
       alert('Please select a customer');
       return;
     }
     
-    if (!formData.batteryType || formData.batteryType.trim() === '') {
-      alert('Please select a battery type');
-      return;
+    // For payment-only entries, only debit is required
+    if (isPaymentOnly) {
+      if (!formData.debit || parseFloat(formData.debit) <= 0) {
+        alert('Please enter a valid payment amount');
+        return;
+      }
+    } else {
+      // For regular entries, validate product type, weight, and rate
+      if (!formData.batteryType || formData.batteryType.trim() === '') {
+        alert('Please select a product type');
+        return;
+      }
+      
+      if (!formData.totalWeight || parseFloat(formData.totalWeight) <= 0) {
+        alert('Please enter a valid total weight');
+        return;
+      }
+      
+      if (!formData.ratePerKg || parseFloat(formData.ratePerKg) <= 0) {
+        alert('Please enter a valid rate per kg');
+        return;
+      }
     }
     
-    if (!formData.totalWeight || parseFloat(formData.totalWeight) <= 0) {
-      alert('Please enter a valid total weight');
-      return;
-    }
-    
-    if (!formData.ratePerKg || parseFloat(formData.ratePerKg) <= 0) {
-      alert('Please enter a valid rate per kg');
-      return;
-    }
-    
-    // Debit can be 0, so just check if it's a valid number
+    // Debit validation (can be 0 for regular entries)
     if (formData.debit === '' || isNaN(parseFloat(formData.debit))) {
       alert('Please enter a valid debit amount');
       return;
@@ -129,10 +166,12 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
       ...formData,
       date: dateValue.toISOString(), // Convert Date to ISO string
       customerId: formData.customerId,
-      totalWeight: parseFloat(formData.totalWeight) || 0,
-      ratePerKg: parseFloat(formData.ratePerKg) || 0,
+      totalWeight: isPaymentOnly ? 0 : (parseFloat(formData.totalWeight) || 0),
+      ratePerKg: isPaymentOnly ? 0 : (parseFloat(formData.ratePerKg) || 0),
       debit: parseFloat(formData.debit) || 0,
-      notes: formData.notes.trim()
+      notes: formData.notes.trim(),
+      isPaymentOnly: isPaymentOnly,
+      batteryType: isPaymentOnly ? (formData.batteryType || 'battery') : formData.batteryType
     };
     
     console.log('Form submitting data:', submitData);
@@ -167,7 +206,7 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
           <input
             type="date"
             name="date"
-            value={formData.date ? new Date(formData.date).toISOString().split('T')[0] : ''}
+            value={formatDateForInput(formData.date)}
             onChange={handleChange}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
             required
@@ -185,82 +224,103 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
           />
         </div>
 
-        <div className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Product Type
-          </label>
-          <div className="relative">
+        <div className="md:col-span-2">
+          <label className="flex items-center space-x-2 cursor-pointer">
             <input
-              type="text"
-              value={customType || formData.batteryType}
-              onChange={(e) => handleCustomTypeChange(e.target.value)}
-              onFocus={() => setIsDropdownOpen(true)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors pr-8"
-              placeholder="Type or select product type"
-              required
+              type="checkbox"
+              checked={isPaymentOnly}
+              onChange={(e) => setIsPaymentOnly(e.target.checked)}
+              className="w-4 h-4 text-[#0A1172] border-gray-300 rounded focus:ring-[#0A1172]/20"
             />
-            <button
-              type="button"
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-            
-            {isDropdownOpen && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
-                {batteryTypes.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => handleTypeSelect(type)}
-                    className="w-full px-3 py-2 text-left text-sm hover:bg-[#0A1172]/5 hover:text-[#0A1172] transition-colors capitalize"
-                  >
-                    {type}
-                  </button>
-                ))}
+            <span className="text-sm font-medium text-gray-700">
+              Payment Only Entry (Debit without weight/product)
+            </span>
+          </label>
+          <p className="text-xs text-gray-500 mt-1">
+            Check this to record a payment received without adding weight/product
+          </p>
+        </div>
+
+        {!isPaymentOnly && (
+          <>
+            <div className="relative">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Product Type
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={customType || formData.batteryType}
+                  onChange={(e) => handleCustomTypeChange(e.target.value)}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors pr-8"
+                  placeholder="Type or select product type"
+                  required={!isPaymentOnly}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                
+                {isDropdownOpen && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                    {batteryTypes.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => handleTypeSelect(type)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-[#0A1172]/5 hover:text-[#0A1172] transition-colors capitalize"
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Total Weight (kg)
+              </label>
+              <input
+                type="number"
+                name="totalWeight"
+                value={formData.totalWeight}
+                onChange={handleChange}
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                placeholder="Enter weight in kg"
+                required={!isPaymentOnly}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Rate per kg
+              </label>
+              <input
+                type="number"
+                name="ratePerKg"
+                value={formData.ratePerKg}
+                onChange={handleChange}
+                step="0.01"
+                min="0"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                placeholder="Enter rate per kg"
+                required={!isPaymentOnly}
+              />
+            </div>
+          </>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Total Weight (kg)
-          </label>
-          <input
-            type="number"
-            name="totalWeight"
-            value={formData.totalWeight}
-            onChange={handleChange}
-            step="0.01"
-            min="0"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-            placeholder="Enter weight in kg"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Rate per kg
-          </label>
-          <input
-            type="number"
-            name="ratePerKg"
-            value={formData.ratePerKg}
-            onChange={handleChange}
-            step="0.01"
-            min="0"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-            placeholder="Enter rate per kg"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Debit Amount
+            {isPaymentOnly ? 'Payment Amount (Debit)' : 'Debit Amount'}
           </label>
           <input
             type="number"
@@ -270,7 +330,7 @@ const LedgerForm = ({ entry, onSubmit, onCancel }) => {
             step="0.01"
             min="0"
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-            placeholder="Enter debit amount"
+            placeholder={isPaymentOnly ? "Enter payment amount received" : "Enter debit amount"}
             required
           />
         </div>

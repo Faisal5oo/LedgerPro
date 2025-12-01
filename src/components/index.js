@@ -27,5 +27,8 @@ export { default as LeadSellingForm } from './lead-selling/LeadSellingForm';
 export { default as LeadSellingActions } from './lead-selling/LeadSellingActions';
 export { default as LeadSellingSearchSummary } from './lead-selling/LeadSellingSearchSummary';
 
+// Customer Components
+export { CustomerForm, CustomerDeleteModal, CustomersTable } from './customers';
+
 // Toast Component
 export { default as ToastProvider } from './ToastProvider';

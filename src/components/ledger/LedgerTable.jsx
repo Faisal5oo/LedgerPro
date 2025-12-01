@@ -263,13 +263,21 @@ const LedgerTable = ({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {entries.map((entry, index) => (
+            {entries.map((entry, index) => {
+              // Detect payment entries: has debit but no credit and no weight
+              const debit = parseFloat(entry.debit) || 0;
+              const credit = parseFloat(entry.credit) || 0;
+              const weight = parseFloat(entry.totalWeight) || 0;
+              const isPayment = entry.isPaymentOnly === true || 
+                (debit > 0 && credit === 0 && weight === 0);
+              
+              return (
               <motion.tr
                 key={entry._id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="hover:bg-gray-50 transition-colors"
+                className={`hover:bg-gray-50 transition-colors ${isPayment ? 'bg-blue-50/30' : ''}`}
               >
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   {format(new Date(entry.date), 'dd/MM/yyyy')}
@@ -287,29 +295,53 @@ const LedgerTable = ({
                   </button>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 capitalize">
-                  {entry.batteryType}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    entry.batteryType || '-'
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  <button
-                    onClick={() => handleWeightClick(entry)}
-                    className="flex items-center space-x-2 text-[#0A1172] hover:text-[#0A1172]/80 hover:underline transition-colors group"
-                    title="Click to add more weight"
-                  >
-                    <span className="font-medium">{entry.totalWeight.toFixed(2)} kg</span>
-                    <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-green-600" />
-                  </button>
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    <button
+                      onClick={() => handleWeightClick(entry)}
+                      className="flex items-center space-x-2 text-[#0A1172] hover:text-[#0A1172]/80 hover:underline transition-colors group"
+                      title="Click to add more weight"
+                    >
+                      <span className="font-medium">{entry.totalWeight.toFixed(2)} kg</span>
+                      <Plus className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity text-green-600" />
+                    </button>
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  Rs {entry.ratePerKg.toFixed(2)}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `Rs ${entry.ratePerKg.toFixed(2)}`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
-                  Rs {entry.credit.toFixed(2)}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `Rs ${entry.credit.toFixed(2)}`
+                  )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-red-600">
-                  Rs {entry.debit.toFixed(2)}
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
+                  {isPayment ? (
+                    <span className="text-green-600 font-semibold" title="Payment received from customer">
+                      Rs {entry.debit.toFixed(2)}
+                    </span>
+                  ) : (
+                    `Rs ${entry.debit.toFixed(2)}`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
-                  Rs {entry.balance.toFixed(2)}
+                  <span title={isPayment ? "Remaining balance after this payment" : "Running balance"}>
+                    Rs {entry.balance.toFixed(2)}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
                   <div className="truncate" title={entry.notes}>
@@ -342,7 +374,8 @@ const LedgerTable = ({
                   </div>
                 </td>
               </motion.tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -380,7 +413,9 @@ const LedgerTable = ({
 
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-2">Customer: <span className="font-medium text-gray-900">{selectedEntry.customerName || 'Unknown'}</span></p>
+                <p className="text-sm text-gray-600 mb-2">Customer: <span className="font-medium text-gray-900">
+                  {selectedEntry.customerName || selectedEntry.customerId?.name || 'Unknown'}
+                </span></p>
                 <p className="text-sm text-gray-600 mb-2">Date: <span className="font-medium text-gray-900">{format(new Date(selectedEntry.date), 'dd/MM/yyyy')}</span></p>
                 <p className="text-sm text-gray-600 mb-2">Current Total: <span className="font-medium text-gray-900">{selectedEntry.totalWeight.toFixed(2)} kg</span></p>
               </div>

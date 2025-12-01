@@ -26,13 +26,16 @@ export default function CustomerDetailPage({ params }) {
   
   const [customer, setCustomer] = useState(null);
   const [entries, setEntries] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState({
     totalWeight: 0,
     totalCredit: 0,
     totalDebit: 0,
+    totalReceived: 0,
     netBalance: 0,
-    entryCount: 0
+    entryCount: 0,
+    paymentCount: 0
   });
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
@@ -53,29 +56,36 @@ export default function CustomerDetailPage({ params }) {
       const data = await response.json();
 
       if (data.success) {
-        setEntries(data.data.entries);
+        setEntries(data.data.entries || []);
+        setPayments(data.data.payments || []);
         setCustomer(data.data.customer);
         setSummary({
-          totalWeight: data.data.totalWeight,
-          totalCredit: data.data.totalCredit,
-          totalDebit: data.data.totalDebit,
-          netBalance: data.data.netBalance,
-          entryCount: data.data.entries.length
+          totalWeight: data.data.totalWeight || 0,
+          totalCredit: data.data.totalCredit || 0,
+          totalDebit: data.data.totalDebit || 0,
+          totalReceived: data.data.totalReceived || 0,
+          netBalance: data.data.netBalance || 0,
+          entryCount: (data.data.entries || []).length,
+          paymentCount: (data.data.payments || []).length
         });
       } else {
         setEntries([]);
+        setPayments([]);
         setCustomer(null);
         setSummary({
           totalWeight: 0,
           totalCredit: 0,
           totalDebit: 0,
+          totalReceived: 0,
           netBalance: 0,
-          entryCount: 0
+          entryCount: 0,
+          paymentCount: 0
         });
       }
     } catch (error) {
       console.error('Error fetching customer entries:', error);
       setEntries([]);
+      setPayments([]);
       setCustomer(null);
     } finally {
       setLoading(false);
@@ -435,7 +445,7 @@ export default function CustomerDetailPage({ params }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="bg-white/10 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <Scale className="w-5 h-5" />
@@ -447,7 +457,7 @@ export default function CustomerDetailPage({ params }) {
             <div className="bg-white/10 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <DollarSign className="w-5 h-5" />
-                <span className="text-sm font-medium">Total Credit</span>
+                <span className="text-sm font-medium">Total Amount</span>
               </div>
               <div className="text-xl font-bold">Rs {summary.totalCredit.toFixed(2)}</div>
             </div>
@@ -462,8 +472,16 @@ export default function CustomerDetailPage({ params }) {
 
             <div className="bg-white/10 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
+                <DollarSign className="w-5 h-5" />
+                <span className="text-sm font-medium">Total Received</span>
+              </div>
+              <div className="text-xl font-bold">Rs {summary.totalReceived.toFixed(2)}</div>
+            </div>
+
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center space-x-2 mb-2">
                 <TrendingUp className="w-5 h-5" />
-                <span className="text-sm font-medium">Net Balance</span>
+                <span className="text-sm font-medium">Remaining Balance</span>
               </div>
               <div className={`text-xl font-bold ${summary.netBalance >= 0 ? 'text-green-300' : 'text-red-300'}`}>
                 Rs {summary.netBalance.toFixed(2)}
@@ -540,7 +558,7 @@ export default function CustomerDetailPage({ params }) {
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
                             Rs {entry.credit.toFixed(2)}
                           </td>
-                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-red-600">
+                          <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
                             Rs {entry.debit.toFixed(2)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
@@ -626,6 +644,88 @@ export default function CustomerDetailPage({ params }) {
             </div>
           )}
         </div>
+
+        {/* Payments Table */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Payment Received</h3>
+            <p className="text-sm text-gray-500 mt-1">All payment entries (debit without weight/product)</p>
+          </div>
+          
+          {payments.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-[#0A1172]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Customer</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Payment Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Notes</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payments.map((payment, index) => {
+                    const customerName = payment.customerId?.name || customer?.name || 'Unknown Customer';
+                    return (
+                      <motion.tr
+                        key={payment._id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {format(new Date(payment.date), 'dd/MM/yyyy')}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{customerName}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
+                          Rs {payment.debit.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          <div className="truncate" title={payment.notes}>
+                            {payment.notes || '-'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handlePrintBill(payment)}
+                            className="text-[#0A1172] hover:text-[#0A1172]/80 transition-colors p-2 rounded hover:bg-[#0A1172]/10"
+                            title="Print payment receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td colSpan="2" className="px-4 py-3 text-sm font-medium text-gray-900">Total</td>
+                    <td className="px-4 py-3 text-sm font-bold text-green-600">
+                      Rs {summary.totalReceived.toFixed(2)}
+                    </td>
+                    <td colSpan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <DollarSign className="mx-auto h-16 w-16" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No payments recorded</h3>
+              <p className="text-gray-500">No payment entries found for this customer.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Weight Addition Modal */}
@@ -649,7 +749,12 @@ export default function CustomerDetailPage({ params }) {
 
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-2">Customer: <span className="font-medium text-gray-900">{customer?.name || 'Unknown'}</span></p>
+                  <p className="text-sm text-gray-600 mb-2">Customer: <span className="font-medium text-gray-900">
+                  {customer?.name || 
+                   selectedEntry.customerName || 
+                   selectedEntry.customerId?.name || 
+                   'Unknown'}
+                </span></p>
                 <p className="text-sm text-gray-600 mb-2">Date: <span className="font-medium text-gray-900">{format(new Date(selectedEntry.date), 'dd/MM/yyyy')}</span></p>
                 <p className="text-sm text-gray-600 mb-2">Current Total: <span className="font-medium text-gray-900">{selectedEntry.totalWeight.toFixed(2)} kg</span></p>
               </div>

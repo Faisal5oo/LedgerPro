@@ -33,30 +33,84 @@ export async function GET(req) {
     }
     
     // Find all entries for this customer, sorted by date and creation time
-    const entries = await LedgerEntry.find({ customerId: customerId })
+    const allEntries = await LedgerEntry.find({ customerId: customerId })
       .populate('customerId', 'name')
       .sort({ date: 1, createdAt: 1 })
       .lean();
     
-    if (entries.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No entries found for this customer' },
-        { status: 404 }
-      );
+    // Separate ledger entries from payment-only entries
+    // An entry is considered a payment if:
+    // 1. Explicitly marked as isPaymentOnly === true, OR
+    // 2. Has debit > 0, credit = 0 (or very small), and totalWeight = 0 (or very small) (payment pattern)
+    const isPaymentEntry = (entry) => {
+      // Check explicit flag first
+      if (entry.isPaymentOnly === true) {
+        return true;
+      }
+      
+      // Check payment pattern: debit > 0, credit = 0, weight = 0
+      const debit = parseFloat(entry.debit) || 0;
+      const credit = parseFloat(entry.credit) || 0;
+      const weight = parseFloat(entry.totalWeight) || 0;
+      
+      // Payment pattern: has debit but no credit and no weight
+      if (debit > 0 && credit === 0 && weight === 0) {
+        return true;
+      }
+      
+      return false;
+    };
+    
+    const entries = allEntries.filter(entry => !isPaymentEntry(entry));
+    const payments = allEntries.filter(entry => isPaymentEntry(entry));
+    
+    console.log(`Customer ${customerId}: Found ${entries.length} ledger entries and ${payments.length} payment entries`);
+    if (payments.length > 0) {
+      console.log('Payment entries:', payments.map(p => ({
+        id: p._id,
+        date: p.date,
+        debit: p.debit,
+        credit: p.credit,
+        weight: p.totalWeight,
+        isPaymentOnly: p.isPaymentOnly
+      })));
+    }
+    
+    // Get customer information
+    let customer;
+    if (allEntries.length > 0) {
+      customer = allEntries[0].customerId;
+    } else {
+      // If no entries, fetch customer directly
+      const Customer = (await import('@/models/Customer')).default;
+      customer = await Customer.findById(customerId);
+      if (!customer) {
+        return NextResponse.json(
+          { success: false, error: 'Customer not found' },
+          { status: 404 }
+        );
+      }
     }
 
-    // Calculate summary statistics
-    const totalWeight = entries.reduce((sum, entry) => sum + entry.totalWeight, 0);
-    const totalCredit = entries.reduce((sum, entry) => sum + entry.credit, 0);
-    const totalDebit = entries.reduce((sum, entry) => sum + entry.debit, 0);
-    const netBalance = totalCredit - totalDebit;
+    // Calculate summary statistics for ledger entries
+    const totalWeight = entries.reduce((sum, entry) => sum + (entry.totalWeight || 0), 0);
+    const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
+    const totalDebit = entries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+    
+    // Calculate total received from payment entries
+    const totalReceived = payments.reduce((sum, entry) => sum + (entry.debit || 0), 0);
+    
+    // Net balance = total credit - (debit from entries + payments)
+    const netBalance = totalCredit - totalDebit - totalReceived;
 
     const customerData = {
-      customer: entries[0].customerId,
+      customer: customer,
       entries: entries,
+      payments: payments,
       totalWeight: totalWeight,
       totalCredit: totalCredit,
       totalDebit: totalDebit,
+      totalReceived: totalReceived,
       netBalance: netBalance
     };
     
