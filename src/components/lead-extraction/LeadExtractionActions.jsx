@@ -96,8 +96,18 @@ const LeadExtractionActions = ({
             <Calendar className="w-4 h-4 text-gray-500" />
             <input 
               type="date" 
-              value={selectedDate.toISOString().split('T')[0]} 
-              onChange={(e) => onDateChange(new Date(e.target.value))} 
+              value={selectedDate instanceof Date && !isNaN(selectedDate.getTime()) 
+                ? selectedDate.toISOString().split('T')[0] 
+                : ''} 
+              onChange={(e) => {
+                const inputValue = e.target.value;
+                if (inputValue) {
+                  const newDate = new Date(inputValue);
+                  if (!isNaN(newDate.getTime())) {
+                    onDateChange(newDate);
+                  }
+                }
+              }} 
               className="px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors" 
             />
           </div>
@@ -118,13 +128,14 @@ const LeadExtractionActions = ({
             <Printer className="w-4 h-4 mr-2" />
             Print
           </button>
-          <button 
+          {/* Export PDF button hidden for now */}
+          {/* <button 
             onClick={onExportPDF}
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-[#0A1172] bg-white border border-[#0A1172] rounded-md hover:bg-[#0A1172]/5 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
           >
             <FileDown className="w-4 h-4 mr-2" />
             Export PDF
-          </button>
+          </button> */}
         </div>
       </motion.div>
     </motion.div>

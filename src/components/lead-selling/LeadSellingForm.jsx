@@ -13,10 +13,14 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
     notes: ''
   });
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [isPaymentOnly, setIsPaymentOnly] = useState(false);
 
   // Handle entry prop for editing
   useEffect(() => {
     if (entry) {
+      const isPayment = entry.isPaymentOnly === true;
+      setIsPaymentOnly(isPayment);
+      
       setFormData({
         date: entry.date ? new Date(entry.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         commuteRent: entry.commuteRent || '',
@@ -39,6 +43,7 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
       }
     } else {
       // Reset form for new entry
+      setIsPaymentOnly(false);
       setFormData({
         date: new Date().toISOString().split('T')[0],
         commuteRent: '',
@@ -67,6 +72,32 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
       return;
     }
 
+    // For payment-only entries
+    if (isPaymentOnly) {
+      if (!formData.debit || parseFloat(formData.debit) <= 0) {
+        alert('Please enter a valid payment amount');
+        return;
+      }
+
+      const submitData = {
+        customerId: selectedCustomer._id,
+        date: new Date(formData.date).toISOString(),
+        commuteRent: 0,
+        weight: 0,
+        rate: 0,
+        debit: parseFloat(formData.debit),
+        credit: 0,
+        balance: -parseFloat(formData.debit),
+        notes: formData.notes,
+        isPaymentOnly: true
+      };
+
+      console.log('Form submitting payment entry:', submitData);
+      onSubmit(submitData);
+      return;
+    }
+
+    // For regular lead selling entries
     if (!formData.weight || parseFloat(formData.weight) <= 0) {
       alert('Please enter a valid weight');
       return;
@@ -106,7 +137,8 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
       debit: debit,
       credit: credit,
       balance: balance,
-      notes: formData.notes
+      notes: formData.notes,
+      isPaymentOnly: false
     };
 
     console.log('Form submitting complete data:', submitData);
@@ -169,6 +201,24 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
               />
             </div>
 
+            {/* Payment Only Checkbox */}
+            <div className="md:col-span-2">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={isPaymentOnly}
+                  onChange={(e) => setIsPaymentOnly(e.target.checked)}
+                  className="w-4 h-4 text-[#0A1172] border-gray-300 rounded focus:ring-[#0A1172]/20"
+                />
+                <span className="text-sm font-medium text-gray-700">
+                  Payment Only Entry (Payment received without lead selling)
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 mt-1">
+                Check this to record a payment received without adding lead selling data
+              </p>
+            </div>
+
             {/* Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -185,93 +235,122 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
               />
             </div>
 
-            {/* Commute Rent */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Truck className="w-4 h-4 inline mr-2" />
-                Commute Rent (Rs)
-              </label>
-              <input
-                type="number"
-                name="commuteRent"
-                value={formData.commuteRent}
-                onChange={handleChange}
-                step="0.01"
-                min="0"
-                placeholder="Enter commute rent"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Transportation cost for delivering lead.
-              </p>
-            </div>
+            {/* Payment Amount - shown only for payment entries */}
+            {isPaymentOnly && (
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <Package className="w-4 h-4 inline mr-2" />
+                  Payment Amount (Rs) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  name="debit"
+                  value={formData.debit}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  placeholder="Enter payment amount received"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                  required={isPaymentOnly}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Enter the payment amount received from the customer
+                </p>
+              </div>
+            )}
 
-            {/* Weight */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Scale className="w-4 h-4 inline mr-2" />
-                Weight (kg)
-              </label>
-              <input
-                type="number"
-                name="weight"
-                value={formData.weight}
-                onChange={handleChange}
-                step="0.01"
-                min="0"
-                placeholder="Enter lead weight"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Weight of lead being sold.
-              </p>
-            </div>
+            {/* Regular entry fields - hidden for payment entries */}
+            {!isPaymentOnly && (
+              <>
+                {/* Commute Rent */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Truck className="w-4 h-4 inline mr-2" />
+                    Commute Rent (Rs)
+                  </label>
+                  <input
+                    type="number"
+                    name="commuteRent"
+                    value={formData.commuteRent}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter commute rent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                    required={!isPaymentOnly}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Transportation cost for delivering lead.
+                  </p>
+                </div>
 
-            {/* Rate */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <TrendingUp className="w-4 h-4 inline mr-2" />
-                Rate per kg (Rs)
-              </label>
-              <input
-                type="number"
-                name="rate"
-                value={formData.rate}
-                onChange={handleChange}
-                step="0.01"
-                min="0"
-                placeholder="Enter rate per kg"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Price per kg of lead.
-              </p>
-            </div>
+                {/* Weight */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Scale className="w-4 h-4 inline mr-2" />
+                    Weight (kg)
+                  </label>
+                  <input
+                    type="number"
+                    name="weight"
+                    value={formData.weight}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter lead weight"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                    required={!isPaymentOnly}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Weight of lead being sold.
+                  </p>
+                </div>
 
-            {/* Debit */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Package className="w-4 h-4 inline mr-2" />
-                Debit (Rs)
-              </label>
-              <input
-                type="number"
-                name="debit"
-                value={formData.debit}
-                onChange={handleChange}
-                step="0.01"
-                min="0"
-                placeholder="Enter debit amount"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Amount paid by customer (can be 0).
-              </p>
-            </div>
+                {/* Rate */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TrendingUp className="w-4 h-4 inline mr-2" />
+                    Rate per kg (Rs)
+                  </label>
+                  <input
+                    type="number"
+                    name="rate"
+                    value={formData.rate}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter rate per kg"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                    required={!isPaymentOnly}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Price per kg of lead.
+                  </p>
+                </div>
+
+                {/* Debit */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <Package className="w-4 h-4 inline mr-2" />
+                    Debit (Rs)
+                  </label>
+                  <input
+                    type="number"
+                    name="debit"
+                    value={formData.debit}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
+                    placeholder="Enter debit amount"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-[#0A1172]/20 focus:border-[#0A1172] transition-colors"
+                    required={!isPaymentOnly}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Amount paid by customer (can be 0).
+                  </p>
+                </div>
+              </>
+            )}
 
             {/* Notes */}
             <div className="md:col-span-2">
@@ -289,30 +368,32 @@ const LeadSellingForm = ({ entry, onSubmit, onCancel }) => {
             </div>
           </div>
 
-          {/* Calculated Values Display */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <h3 className="text-sm font-medium text-gray-700 mb-3">Calculated Values</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  Rs {credit.toFixed(2)}
+          {/* Calculated Values Display - hidden for payment entries */}
+          {!isPaymentOnly && (
+            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">Calculated Values</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    Rs {credit.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-500">Credit</div>
+                  <div className="text-xs text-gray-400">
+                    ({weight.toFixed(2)} kg × Rs {rate.toFixed(2)} + Rs {commuteRent.toFixed(2)})
+                  </div>
                 </div>
-                <div className="text-sm text-gray-500">Credit</div>
-                <div className="text-xs text-gray-400">
-                  ({weight.toFixed(2)} kg × Rs {rate.toFixed(2)} + Rs {commuteRent.toFixed(2)})
-                </div>
-              </div>
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  Rs {balance.toFixed(2)}
-                </div>
-                <div className="text-sm text-gray-500">Balance</div>
-                <div className="text-xs text-gray-400">
-                  (Rs {credit.toFixed(2)} - Rs {debit.toFixed(2)})
+                <div className="text-center">
+                  <div className={`text-2xl font-bold ${balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    Rs {balance.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-gray-500">Balance</div>
+                  <div className="text-xs text-gray-400">
+                    (Rs {credit.toFixed(2)} - Rs {debit.toFixed(2)})
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Actions */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">

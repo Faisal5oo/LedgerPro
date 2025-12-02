@@ -48,6 +48,10 @@ const leadSellingSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  isPaymentOnly: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true

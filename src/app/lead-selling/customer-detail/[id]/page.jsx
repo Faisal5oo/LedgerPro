@@ -12,7 +12,9 @@ import {
   DollarSign, 
   Truck,
   Package,
-  Printer
+  Printer,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Layout from "@/components/LayoutWrapper";
@@ -23,12 +25,14 @@ export default function CustomerDetailPage({ params }) {
   
   const [customer, setCustomer] = useState(null);
   const [entries, setEntries] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [summary, setSummary] = useState({
     totalWeight: 0,
     totalCredit: 0,
     totalDebit: 0,
     totalCommuteRent: 0,
+    totalReceived: 0,
     netBalance: 0,
     entryCount: 0
   });
@@ -47,7 +51,8 @@ export default function CustomerDetailPage({ params }) {
       
       if (data.success) {
         setCustomer(data.data.customer);
-        setEntries(data.data.entries);
+        setEntries(data.data.entries || []);
+        setPayments(data.data.payments || []);
         setSummary(data.data.summary);
       } else {
         console.error('Failed to fetch customer entries:', data.error);
@@ -328,7 +333,7 @@ export default function CustomerDetailPage({ params }) {
           <div class="total-row">
             <div class="bill-row">
               <span class="bill-label">Balance:</span>
-              <span class="bill-value">Rs ${entry.balance?.toFixed(2) || '0.00'}</span>
+              <span class="bill-value">Rs ${(entry.balance !== undefined && entry.balance !== null ? entry.balance.toFixed(2) : ((entry.credit || 0) - (entry.debit || 0)).toFixed(2))}</span>
             </div>
           </div>
           
@@ -434,7 +439,7 @@ export default function CustomerDetailPage({ params }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="bg-white/10 rounded-lg p-4">
               <div className="flex items-center space-x-2 mb-2">
                 <Scale className="w-5 h-5" />
@@ -457,6 +462,14 @@ export default function CustomerDetailPage({ params }) {
                 <span className="text-sm font-medium">Total Debit</span>
               </div>
               <div className="text-xl font-bold">Rs {summary.totalDebit.toFixed(2)}</div>
+            </div>
+
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center space-x-2 mb-2">
+                <DollarSign className="w-5 h-5" />
+                <span className="text-sm font-medium">Total Received</span>
+              </div>
+              <div className="text-xl font-bold text-green-300">Rs {summary.totalReceived?.toFixed(2) || '0.00'}</div>
             </div>
 
             <div className="bg-white/10 rounded-lg p-4">
@@ -535,6 +548,88 @@ export default function CustomerDetailPage({ params }) {
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Payment Received Table */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Payment Received</h3>
+            <p className="text-sm text-gray-500 mt-1">All payment entries (payments without lead selling)</p>
+          </div>
+          
+          {payments.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-[#0A1172]">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Customer</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Payment Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Notes</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {payments.map((payment, index) => {
+                    const customerName = payment.customerId?.name || customer?.name || 'Unknown Customer';
+                    return (
+                      <motion.tr
+                        key={payment._id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className="hover:bg-gray-50 transition-colors"
+                      >
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          {format(new Date(payment.date), 'dd/MM/yyyy')}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center space-x-2">
+                            <User className="w-4 h-4 text-gray-400" />
+                            <span className="font-medium">{customerName}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
+                          Rs {(payment.debit || 0).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                          <div className="truncate" title={payment.notes}>
+                            {payment.notes || '-'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          <button
+                            onClick={() => handlePrintBill(payment)}
+                            className="text-[#0A1172] hover:text-[#0A1172]/80 transition-colors p-2 rounded hover:bg-[#0A1172]/10"
+                            title="Print payment receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot className="bg-gray-50">
+                  <tr>
+                    <td colSpan="2" className="px-4 py-3 text-sm font-medium text-gray-900">Total</td>
+                    <td className="px-4 py-3 text-sm font-bold text-green-600">
+                      Rs {summary.totalReceived?.toFixed(2) || '0.00'}
+                    </td>
+                    <td colSpan="2"></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-4">
+                <DollarSign className="mx-auto h-16 w-16" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No payments recorded</h3>
+              <p className="text-gray-500">No payment entries found for this customer.</p>
+            </div>
+          )}
         </div>
       </div>
     </Layout>

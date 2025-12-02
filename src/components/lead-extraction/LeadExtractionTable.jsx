@@ -200,13 +200,18 @@ const LeadExtractionTable = ({ entries, onEdit, onDelete, onCustomerClick }) => 
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {entries.map((entry, index) => (
+            {entries.map((entry, index) => {
+              // Detect lead received only entries
+              const isLeadReceivedOnly = entry.isLeadReceivedOnly === true || 
+                (entry.batteryWeight === 0 && entry.leadReceived > 0);
+              
+              return (
               <motion.tr
                 key={entry._id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="hover:bg-gray-50 transition-colors"
+                className={`hover:bg-gray-50 transition-colors ${isLeadReceivedOnly ? 'bg-blue-50/30' : ''}`}
               >
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   {format(new Date(entry.date), 'dd/MM/yyyy')}
@@ -224,27 +229,56 @@ const LeadExtractionTable = ({ entries, onEdit, onDelete, onCustomerClick }) => 
                   </button>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 capitalize">
-                  {entry.description}
+                  {isLeadReceivedOnly ? (
+                    <span className="text-blue-600 font-medium">Lead Received</span>
+                  ) : (
+                    entry.description
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  {entry.batteryWeight.toFixed(2)}
+                  {isLeadReceivedOnly ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    entry.batteryWeight.toFixed(2)
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-purple-600">
-                  {entry.leadPercentage?.toFixed(1) || '60.0'}%
+                  {isLeadReceivedOnly ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `${entry.leadPercentage?.toFixed(1) || '60.0'}%`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-blue-600">
-                  {entry.leadWeight.toFixed(2)}
+                  {isLeadReceivedOnly ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    entry.leadWeight.toFixed(2)
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
                   {entry.leadReceived.toFixed(2)}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-orange-600">
-                  {entry.leadPending.toFixed(2)}
+                  {isLeadReceivedOnly ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    entry.leadPending.toFixed(2)
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-bold text-gray-900">
-                  {entry.percentage}%
+                  {isLeadReceivedOnly ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `${entry.percentage}%`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {isLeadReceivedOnly && entry.notes && (
+                    <div className="text-xs text-gray-500 mb-1" title={entry.notes}>
+                      {entry.notes.length > 30 ? entry.notes.substring(0, 30) + '...' : entry.notes}
+                    </div>
+                  )}
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => handlePrintBill(entry)}
@@ -270,7 +304,8 @@ const LeadExtractionTable = ({ entries, onEdit, onDelete, onCustomerClick }) => 
                   </div>
                 </td>
               </motion.tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

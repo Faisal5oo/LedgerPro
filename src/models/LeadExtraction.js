@@ -19,20 +19,28 @@ const leadExtractionSchema = new mongoose.Schema({
   },
   batteryWeight: {
     type: Number,
-    required: true,
-    min: 0
+    required: function() {
+      return !this.isLeadReceivedOnly;
+    },
+    min: 0,
+    default: 0
   },
   leadPercentage: {
     type: Number,
-    required: true,
+    required: function() {
+      return !this.isLeadReceivedOnly;
+    },
     min: 0,
     max: 100,
     default: 60
   },
   leadWeight: {
     type: Number,
-    required: true,
-    min: 0
+    required: function() {
+      return !this.isLeadReceivedOnly;
+    },
+    min: 0,
+    default: 0
   },
   leadReceived: {
     type: Number,
@@ -42,14 +50,29 @@ const leadExtractionSchema = new mongoose.Schema({
   },
   leadPending: {
     type: Number,
-    required: true,
-    min: 0
+    required: function() {
+      return !this.isLeadReceivedOnly;
+    },
+    min: 0,
+    default: 0
   },
   percentage: {
     type: Number,
-    required: true,
+    required: function() {
+      return !this.isLeadReceivedOnly;
+    },
     min: 0,
-    max: 100
+    max: 100,
+    default: 0
+  },
+  isLeadReceivedOnly: {
+    type: Boolean,
+    default: false
+  },
+  notes: {
+    type: String,
+    trim: true,
+    default: ''
   }
 }, {
   timestamps: true

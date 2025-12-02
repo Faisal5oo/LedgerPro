@@ -30,34 +30,68 @@ export async function GET(req, { params }) {
     }
     
     // Find all lead selling entries for this customer, sorted by date and creation time
-    const entries = await LeadSelling.find({ customerId: id })
+    const allEntries = await LeadSelling.find({ customerId: id })
       .populate('customerId', 'name')
       .sort({ date: 1, createdAt: 1 })
       .lean();
     
-    if (entries.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'No lead selling entries found for this customer' },
-        { status: 404 }
-      );
+    // Separate lead selling entries from payment-only entries
+    const isPaymentEntry = (entry) => {
+      if (entry.isPaymentOnly === true) {
+        return true;
+      }
+      // Check payment pattern: has debit but no weight/credit
+      const debit = parseFloat(entry.debit) || 0;
+      const weight = parseFloat(entry.weight) || 0;
+      const credit = parseFloat(entry.credit) || 0;
+      if (debit > 0 && credit === 0 && weight === 0) {
+        return true;
+      }
+      return false;
+    };
+    
+    const entries = allEntries.filter(entry => !isPaymentEntry(entry));
+    const payments = allEntries.filter(entry => isPaymentEntry(entry));
+    
+    // Get customer information
+    let customer;
+    if (allEntries.length > 0) {
+      customer = allEntries[0].customerId;
+    } else {
+      // If no entries, fetch customer directly
+      const Customer = (await import('@/models/Customer')).default;
+      customer = await Customer.findById(id);
+      if (!customer) {
+        return NextResponse.json(
+          { success: false, error: 'Customer not found' },
+          { status: 404 }
+        );
+      }
     }
 
-    // Calculate summary statistics
+    // Calculate summary statistics for lead selling entries only
     const totalWeight = entries.reduce((sum, entry) => sum + (entry.weight || 0), 0);
     const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit || 0), 0);
     const totalDebit = entries.reduce((sum, entry) => sum + (entry.debit || 0), 0);
     const totalCommuteRent = entries.reduce((sum, entry) => sum + (entry.commuteRent || 0), 0);
-    const netBalance = totalCredit - totalDebit;
+    
+    // Calculate total received from payment entries
+    const totalReceived = payments.reduce((sum, entry) => sum + (parseFloat(entry.debit) || 0), 0);
+    
+    // Net balance = total credit - total debit (from entries) - total received (from payments)
+    const netBalance = totalCredit - totalDebit - totalReceived;
 
     const customerData = {
-      customer: entries[0].customerId,
+      customer: customer,
       entries: entries,
+      payments: payments,
       summary: {
         totalEntries: entries.length,
         totalWeight: totalWeight,
         totalCredit: totalCredit,
         totalDebit: totalDebit,
         totalCommuteRent: totalCommuteRent,
+        totalReceived: totalReceived,
         netBalance: netBalance
       }
     };

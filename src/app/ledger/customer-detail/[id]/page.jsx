@@ -229,7 +229,7 @@ export default function CustomerDetailPage({ params }) {
             </div>
             <div class="bill-row">
               <span class="bill-label">Balance:</span>
-              <span class="bill-value">Rs ${(entry.credit - entry.debit)?.toFixed(2) || '0.00'}</span>
+              <span class="bill-value">Rs ${(entry.balance !== undefined && entry.balance !== null ? entry.balance : (entry.credit || 0) - (entry.debit || 0)).toFixed(2)}</span>
             </div>
           </div>
           

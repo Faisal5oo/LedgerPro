@@ -130,13 +130,14 @@ const LedgerActions = ({
             <Printer className="w-4 h-4 mr-2" />
             Print
           </button> */}
-          <button 
+          {/* Export PDF button hidden for now */}
+          {/* <button 
             onClick={onExportPDF}
             className="inline-flex items-center px-4 py-2 text-sm font-medium text-[#0A1172] bg-white border border-[#0A1172] rounded-md hover:bg-[#0A1172]/5 focus:outline-none focus:ring-2 focus:ring-[#0A1172]/20 transition-colors"
           >
             <FileDown className="w-4 h-4 mr-2" />
             Export PDF
-          </button>
+          </button> */}
         </div>
       </motion.div>
     </motion.div>

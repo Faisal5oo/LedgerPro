@@ -30,12 +30,6 @@ const menuItems = [
     description: 'Manage Transactions'
   },
   {
-    path: '/customers',
-    name: 'Customers',
-    icon: Users,
-    description: 'Manage Customers'
-  },
-  {
     path: '/lead-extraction',
     name: 'Lead Extraction',
     icon: Package,
@@ -48,11 +42,11 @@ const menuItems = [
     description: 'Sell Lead to Clients'
   },
   {
-    path: '/settings',
-    name: 'Settings',
-    icon: Settings,
-    description: 'System Settings'
-  }
+    path: '/customers',
+    name: 'Customers',
+    icon: Users,
+    description: 'Manage Customers'
+  },
 ];
 
 const Layout = ({ children }) => {

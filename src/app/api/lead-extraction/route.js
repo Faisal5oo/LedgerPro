@@ -105,6 +105,44 @@ export async function POST(req) {
       );
     }
 
+    // Check if this is a lead received only entry
+    const isLeadReceivedOnly = body.isLeadReceivedOnly === true;
+
+    if (isLeadReceivedOnly) {
+      // For lead received only entries, only leadReceived is required
+      if (!body.leadReceived || parseFloat(body.leadReceived) <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'Valid lead received amount is required for lead received only entries' },
+          { status: 400 }
+        );
+      }
+
+      // Create lead received only entry
+      const leadReceivedEntry = {
+        customerId: body.customerId,
+        date: body.date,
+        description: body.description || 'Lead Received',
+        batteryWeight: 0,
+        leadPercentage: 0,
+        leadWeight: 0,
+        leadReceived: parseFloat(body.leadReceived),
+        leadPending: 0,
+        percentage: 0,
+        isLeadReceivedOnly: true,
+        notes: body.notes || ''
+      };
+
+      const entry = await LeadExtraction.create(leadReceivedEntry);
+      await entry.populate('customerId', 'name');
+      
+      console.log('Successfully created lead received only entry:', entry);
+      return NextResponse.json(
+        { success: true, data: entry, message: 'Lead received entry created successfully' },
+        { status: 201 }
+      );
+    }
+
+    // For regular lead extraction entries
     if (!body.batteryWeight || isNaN(body.batteryWeight)) {
       return NextResponse.json(
         { success: false, error: 'Valid battery weight is required' },
@@ -139,6 +177,10 @@ export async function POST(req) {
         { status: 400 }
       );
     }
+    
+    // Set default values for regular entries
+    body.isLeadReceivedOnly = false;
+    body.notes = body.notes || '';
     
     // Create new entry with complete data
     const entry = await LeadExtraction.create(body);

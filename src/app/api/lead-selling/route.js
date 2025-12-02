@@ -94,6 +94,43 @@ export async function POST(req) {
       );
     }
 
+    // Check if this is a payment-only entry
+    const isPaymentOnly = body.isPaymentOnly === true;
+
+    if (isPaymentOnly) {
+      // For payment-only entries, validate payment amount
+      if (!body.debit || parseFloat(body.debit) <= 0) {
+        return NextResponse.json(
+          { success: false, error: 'Valid payment amount is required for payment entries' },
+          { status: 400 }
+        );
+      }
+      
+      // Create payment entry with default values
+      const paymentEntry = {
+        customerId: body.customerId,
+        date: body.date,
+        commuteRent: 0,
+        weight: 0,
+        rate: 0,
+        debit: parseFloat(body.debit),
+        credit: 0,
+        balance: -parseFloat(body.debit),
+        notes: body.notes || '',
+        isPaymentOnly: true
+      };
+      
+      const entry = await LeadSelling.create(paymentEntry);
+      await entry.populate('customerId', 'name');
+      
+      console.log('Successfully created payment entry:', entry);
+      return NextResponse.json(
+        { success: true, data: entry, message: 'Payment entry created successfully' },
+        { status: 201 }
+      );
+    }
+
+    // For regular lead selling entries
     if (!body.weight || isNaN(body.weight)) {
       return NextResponse.json(
         { success: false, error: 'Valid weight is required' },
@@ -131,6 +168,9 @@ export async function POST(req) {
     // Credit = (weight * rate) + commute rent
     const credit = Math.round((weight * rate + commuteRent) * 100) / 100;
     const balance = Math.round((credit - debit) * 100) / 100;
+    
+    // Set default values for regular entries
+    body.isPaymentOnly = false;
     
     // Create new entry with complete data
     const entry = await LeadSelling.create({

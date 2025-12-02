@@ -157,7 +157,7 @@ const LeadSellingTable = ({ entries, onEdit, onDelete, onCustomerClick }) => {
           <div class="total-row">
             <div class="bill-row">
               <span class="bill-label">Balance:</span>
-              <span class="bill-value">Rs ${entry.balance?.toFixed(2) || '0.00'}</span>
+              <span class="bill-value">Rs ${(entry.balance !== undefined && entry.balance !== null ? entry.balance.toFixed(2) : ((entry.credit || 0) - (entry.debit || 0)).toFixed(2))}</span>
             </div>
           </div>
           
@@ -205,13 +205,18 @@ const LeadSellingTable = ({ entries, onEdit, onDelete, onCustomerClick }) => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {entries.map((entry, index) => (
+            {entries.map((entry, index) => {
+              // Detect payment entries
+              const isPayment = entry.isPaymentOnly === true || 
+                (entry.debit > 0 && entry.credit === 0 && entry.weight === 0);
+              
+              return (
               <motion.tr
                 key={entry._id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="hover:bg-gray-50 transition-colors"
+                className={`hover:bg-gray-50 transition-colors ${isPayment ? 'bg-blue-50/30' : ''}`}
               >
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   {format(new Date(entry.date), 'dd/MM/yyyy')}
@@ -229,22 +234,42 @@ const LeadSellingTable = ({ entries, onEdit, onDelete, onCustomerClick }) => {
                   </button>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  Rs {entry.commuteRent?.toFixed(2) || '0.00'}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `Rs ${entry.commuteRent?.toFixed(2) || '0.00'}`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  {entry.weight?.toFixed(2) || '0.00'}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    entry.weight?.toFixed(2) || '0.00'
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  Rs {entry.rate?.toFixed(2) || '0.00'}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `Rs ${entry.rate?.toFixed(2) || '0.00'}`
+                  )}
                 </td>
-                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
                   Rs {entry.debit?.toFixed(2) || '0.00'}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-green-600">
-                  Rs {entry.credit?.toFixed(2) || '0.00'}
+                  {isPayment ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    `Rs ${entry.credit?.toFixed(2) || '0.00'}`
+                  )}
                 </td>
                 <td className={`px-4 py-3 whitespace-nowrap text-sm font-bold ${entry.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  Rs {entry.balance?.toFixed(2) || '0.00'}
+                  {isPayment ? (
+                    <span className="text-gray-400" title="Remaining balance after this payment">-</span>
+                  ) : (
+                    `Rs ${entry.balance?.toFixed(2) || '0.00'}`
+                  )}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   <div className="flex items-center space-x-2">
@@ -272,7 +297,8 @@ const LeadSellingTable = ({ entries, onEdit, onDelete, onCustomerClick }) => {
                   </div>
                 </td>
               </motion.tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
